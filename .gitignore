@@ -1,4 +1,7 @@
-__pycache__/
-# exclude data from source control by default
-/data/
-/ckpt/
+.gitignore
+**/__pycache__/*
+
+.vscode/
+ckpt/
+data/
+notebooks/
