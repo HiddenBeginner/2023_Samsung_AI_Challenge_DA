@@ -2,7 +2,7 @@ import albumentations as A
 import numpy as np
 import torch
 from albumentations.core.transforms_interface import DualTransform
-
+from albumentations.pytorch import ToTensorV2
 
 def fisheye_circular_transform_torch(image, mask=None, fov_degree=200, focal_scale=4.5):
     img = image if image is not None else mask
@@ -84,5 +84,31 @@ augmentation_pl = A.Compose(
         FisheyeTransform(p=0.75),
         A.RandomScale(scale_limit=(-0.5, 0.0), p=1.0),
         A.RandomCrop(512, 512, p=1.0),
+    ]
+)
+
+
+augmentation_base = A.Compose([
+    FisheyeTransform(p=0.5),
+    A.RandomCrop(width=224, height=224),
+    A.RandomScale(scale_limit=0.2, p=0.2),
+    #A.RandomRotate90(p=0.5),
+    #A.HorizontalFlip(p=0.2),
+    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.2),
+    A.ColorJitter(p=0.3),
+    A.GaussianBlur(blur_limit=(3, 7), p=0.2),
+    #A.CoarseDropout(max_holes=8, max_height=16, max_width=16, fill_value=0, p=0.5),
+    A.Resize(513, 513),
+    A.Normalize(mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]),
+    ToTensorV2()
+])
+
+transform_base = A.Compose(
+    [   
+        A.Resize(513, 513),
+        A.Normalize(mean=[0.485, 0.456, 0.406], # ImageNet 데이터의 통계량으로 정규화
+                    std=[0.229, 0.224, 0.225]),
+        ToTensorV2()
     ]
 )

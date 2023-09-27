@@ -1,3 +1,7 @@
 __pycache__/
 # exclude data from source control by default
 /data/
+/ckpt/
+/dann/__pycahe__
+/experiments
+/wandb

@@ -26,3 +26,4 @@ SegFormer = SegformerForSemanticSegmentation.from_pretrained(
             label2id=label2id,
             ignore_mismatched_sizes=True,
         )
+
