@@ -61,7 +61,11 @@ class Trainer:
             self.threshold_scheduler.current_epoch = e
             train_scores = self.train(train_loader, target_loader)
             valid_scores = self.evaluate(valid_loader)
-            self.adjuster.update(valid_scores['mIoU'])
+            
+            if self.adjuster:
+                self.adjuster.update(valid_scores['mIoU'])
+            else:
+                pass
             
             log = {'Epoch': e + 1, 'LR': self.scheduler.get_lr()[0]}
             for k, v in train_scores.items():
