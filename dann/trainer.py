@@ -42,7 +42,9 @@ class Trainer:
         self.criterion = AuxMixLoss(criterion=nn.CrossEntropyLoss(), alpha=0.3)
         # self.criterion = FocalLoss()
         self.threshold_scheduler = DynamicThreshold(start_threshold=0.9, end_threshold=0.7, total_epochs=self.n_epochs)
-        self.adjuster = PerformanceBasedAdjuster(initial_alpha=0.9, adjustment_rate=0.05)
+        
+        self.adjuster = None
+        #self.adjuster = PerformanceBasedAdjuster(initial_alpha=0.9, adjustment_rate=0.05)
 
         self.criterion_D = nn.BCEWithLogitsLoss()
         self.lambda_scheduler = LambdaScheduler(max_epochs=self.n_epochs)
@@ -89,6 +91,8 @@ class Trainer:
         self.model.train()
         n = 0
         scores = {'Loss': 0.0,
+                  'Semantic Loss': 0.0,
+                  'Domain Loss': 0.0,
                   'mIoU': 0.0}
         
         source_iter = iter(source_loader)
@@ -125,6 +129,7 @@ class Trainer:
             # Multiply the pseudo labels with mask so that we only consider high confidence predictions.
             pseudo_labels_masked = mask * pseudo_labels.float()
             pseudo_labels_masked = pseudo_labels_masked.long()
+            pseudo_labels_masked = pseudo_labels_masked.detach() # backpropagation에 영향을 주지 않도록하기 위해
 
             target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
             # train with source
@@ -153,7 +158,14 @@ class Trainer:
 
             domain_loss = source_domain_loss + target_domain_loss
 
-            total_loss = self.adjuster.alpha * semantic_loss + self.adjuster.beta * domain_loss
+            # Convex combination
+            if self.adjuster:
+                alpha = self.adjuster.alpha
+                beta = self.adjuster.beta
+            else:
+                alpha = 0.5
+                beta = 0.5
+            total_loss = alpha * semantic_loss + beta * domain_loss
             total_loss.backward()
             self.optimizer.step()
 
@@ -161,6 +173,8 @@ class Trainer:
             n += batch_size
             _, predictions = torch.max(source_semantic_outputs['out'], 1)
             scores['Loss'] += batch_size * total_loss.item()
+            scores['Semantic Loss'] += batch_size * semantic_loss.item()
+            scores['Domain Loss'] += batch_size * domain_loss.item()
             for pred, gt in zip(predictions, source_labels):
                 scores['mIoU'] += compute_mIoU(pred, gt)
 
