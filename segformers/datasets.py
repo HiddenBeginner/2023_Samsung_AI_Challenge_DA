@@ -52,13 +52,13 @@ class TargetDataset(Dataset):
         self,
         root,
         csv_file,
-        #image_processor,
+        image_processor,
         transform=None,
         is_training=True
     ):
         self.root = root
         self.data = pd.read_csv(os.path.join(self.root, csv_file))
-        #self.image_processor = image_processor
+        self.image_processor = image_processor
         self.transform = transform
         self.is_training = is_training
 
@@ -74,8 +74,8 @@ class TargetDataset(Dataset):
             augmented = self.transform(image=image)
             image = augmented['image']
 
-        # inputs = self.image_processor(image, return_tensors='pt')
-        # for k, v in inputs.items():
-        #     inputs[k] = v.squeeze(0)
+        inputs = self.image_processor(image, return_tensors='pt')
+        for k, v in inputs.items():
+            inputs[k] = v.squeeze(0)
 
-        return image
+        return inputs

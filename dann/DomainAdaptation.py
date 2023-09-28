@@ -196,6 +196,54 @@ class DANN(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
+                
+class SegFormerDANN(nn.Module):
+    """
+    Domain-Adversarial Neural Network (DANN) for semantic segmentation and domain adaptation.
+    """
+    def __init__(self, 
+                 segformer: nn.Module,
+                 domain_classifier: Optional[nn.Module] = None, 
+                 num_classes: Optional[int] = 13):
+        super(SegFormerDANN, self).__init__()
+        self.grl = GradientReversalLayer()
+        self.segformer = segformer
+
+        # Use the provided domain_classifier or default to the DefaultDomainClassifier
+        if domain_classifier is None:
+            domain_classifier = FullyConvolutionalDiscriminator(num_classes=13)
+
+        self.domain_classifier = domain_classifier
+
+    def forward(self, x: torch.Tensor, lamda: Optional[float] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Forward pass of the DANN.
+        
+        Args:
+            x (torch.Tensor): Input tensor.
+            lamda (float, optional): Lambda parameter for gradient reversal.
+            
+        Returns:
+            torch.Tensor: Semantic segmentation output.
+            torch.Tensor: Domain classification output.
+        """
+        semantic_outputs = self.segformer(x)[0]
+        
+        if lamda is not None:
+            # Assuming you have a GradientReversalLayer named "grl" in your model
+            features_for_discriminator = self.grl(semantic_outputs, lamda)
+        else:
+            features_for_discriminator = semantic_outputs
+        domain_outputs = self.domain_classifier(features_for_discriminator)
+
+        return semantic_outputs, domain_outputs
+
+    def freeze_bn(self):
+        """Freezes the Batch Normalization layers."""
+        for layer in self.modules():
+            if isinstance(layer, nn.BatchNorm2d):
+                layer.eval()
+
 
 
 class GradientReversalFunction(torch.autograd.Function):

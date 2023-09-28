@@ -14,4 +14,8 @@ __pycache__/
 /dann/__pycahe__
 /experiments
 /wandb
+<<<<<<< HEAD
 >>>>>>> c3becb716f993412dcfc7bd7e2fe2d6860372624
+=======
+*.ipynb
+>>>>>>> 68e3adcbea798e03f0f9a875981ebf0b39ca43ac
