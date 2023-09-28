@@ -5,3 +5,4 @@ __pycache__/
 /dann/__pycahe__
 /experiments
 /wandb
+*.ipynb
