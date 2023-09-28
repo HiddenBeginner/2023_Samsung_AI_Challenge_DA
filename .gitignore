@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .gitignore
 **/__pycache__/*
 
@@ -5,3 +6,12 @@
 ckpt/
 data/
 notebooks/
+=======
+__pycache__/
+# exclude data from source control by default
+/data/
+/ckpt/
+/dann/__pycahe__
+/experiments
+/wandb
+>>>>>>> c3becb716f993412dcfc7bd7e2fe2d6860372624

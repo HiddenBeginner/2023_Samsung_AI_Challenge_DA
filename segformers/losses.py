@@ -41,3 +41,16 @@ class FocalLoss(nn.Module):
             return loss.mean()
         else:
             return loss.sum()
+
+
+class AuxMixLoss(nn.Module):
+    def __init__(self, criterion, alpha):
+        super(AuxMixLoss, self).__init__()
+        self.alpha = alpha
+        self.criterion = criterion
+
+    def forward(self, inputs, targets):
+        main_loss = self.criterion(inputs['out'], targets)
+        aux_loss = self.criterion(inputs['aux'], targets)
+        total_loss = main_loss + self.alpha * aux_loss
+        return total_loss
