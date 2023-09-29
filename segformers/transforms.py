@@ -67,7 +67,7 @@ class FisheyeTransform(DualTransform):
 
 augmentation = A.Compose(
     [
-        FisheyeTransform(p=0.75),
+        #FisheyeTransform(p=0.75),
         A.RandomScale(scale_limit=(-0.5, 0.0), p=1.0),
         A.RandomCrop(512, 512, p=1.0),
         A.HorizontalFlip(),

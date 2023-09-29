@@ -25,12 +25,12 @@ config_dann = {
     'dir_data': './data',
     'dir_ckpt': './ckpt',
     'seed': 0,
-    'n_epochs': 50,
+    'n_epochs': 500,
     'optimizer': {
         'lr': 0.0,
     },
     'optimizer_D': {
-        'lr': 0.001,
+        'lr': 0.0001,
     },
     'scheduler': {
         'T_0': 50,
@@ -42,7 +42,7 @@ config_dann = {
 
     'wandb': {
         'project': 'DA',
-        'name': 'SegFormer-DANN'
+        'name': 'SegFormer-DANN (No fisheye)'
     }
 }
 

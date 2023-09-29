@@ -89,7 +89,11 @@ def slide_inference(images, model, num_classes=13, crop_size=(1024, 1024), strid
             x1 = max(x2 - w_crop, 0)
             crop_img = images[:, :, y1:y2, x1:x2]
 
-            crop_seg_logit = model(pixel_values=crop_img)[0]
+            try:
+                crop_seg_logit = model(crop_img)[0]  # Try calling the model directly with crop_img
+            except TypeError:  # Catch the TypeError if model cannot be called with crop_img directly
+                crop_seg_logit = model(pixel_values=crop_img)[0]  # Call the model with pixel_values argument
+
             crop_seg_logit = F.interpolate(
                 crop_seg_logit,
                 size=crop_size,
