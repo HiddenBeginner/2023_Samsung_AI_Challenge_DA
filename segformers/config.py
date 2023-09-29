@@ -35,7 +35,7 @@ config_dann = {
     'scheduler': {
         'T_0': 50,
         'T_mult': 1,
-        'eta_max': 0.001,
+        'eta_max': 0.0001,
         'T_up': 5,
         'gamma': 0.5,
     },

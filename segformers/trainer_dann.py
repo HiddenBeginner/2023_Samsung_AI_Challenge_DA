@@ -161,15 +161,15 @@ class Trainer:
             prediction_probs = F.softmax(target_semantic_outputs, dim=1)  # get the softmax probabilities
             max_probs, _ = torch.max(prediction_probs, dim=1)  # get the max probability for each prediction
 
-            threshold = self.threshold_scheduler.get_threshold()
-            mask = max_probs.ge(threshold).float()  # create a mask for predictions with confidence >= threshold
+            # threshold = self.threshold_scheduler.get_threshold()
+            # mask = max_probs.ge(threshold).float()  # create a mask for predictions with confidence >= threshold
 
-            # Multiply the pseudo labels with mask so that we only consider high confidence predictions.
-            pseudo_labels_masked = mask * pseudo_labels.float()
-            pseudo_labels_masked = pseudo_labels_masked.long()
-            pseudo_labels_masked = pseudo_labels_masked.detach() # backpropagation에 영향을 주지 않도록하기 위해
+            # # Multiply the pseudo labels with mask so that we only consider high confidence predictions.
+            # pseudo_labels_masked = mask * pseudo_labels.float()
+            # pseudo_labels_masked = pseudo_labels_masked.long()
+            # pseudo_labels_masked = pseudo_labels_masked.detach() # backpropagation에 영향을 주지 않도록하기 위해
 
-            target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
+            # target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
             # train with source
             try:
                 source_items = next(source_iter)
@@ -183,7 +183,7 @@ class Trainer:
             source_semantic_outputs = upsampled_logit(source_semantic_outputs, source_labels)
             source_semantic_loss = self.criterion(source_semantic_outputs, source_labels)
 
-            semantic_loss = source_semantic_loss + target_semantic_loss
+            semantic_loss = source_semantic_loss# + target_semantic_loss
 
             # train D
             for params in self.model.domain_classifier.parameters():
