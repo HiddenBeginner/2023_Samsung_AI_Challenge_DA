@@ -215,6 +215,14 @@ class SegFormerDANN(nn.Module):
 
         self.domain_classifier = domain_classifier
 
+    @property
+    def module(self):
+        """
+        If the model is being used with DataParallel, 
+        this property will return the actual model.
+        """
+        return self._modules.get('module', self)
+
     def forward(self, x: torch.Tensor, lamda: Optional[float] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass of the DANN.
@@ -238,11 +246,6 @@ class SegFormerDANN(nn.Module):
 
         return semantic_outputs, domain_outputs
     
-    @property
-    def model(self):
-        if isinstance(self._model, nn.DataParallel):
-            return self._model.module
-        return self._model
     
     def freeze_bn(self):
         """Freezes the Batch Normalization layers."""

@@ -29,15 +29,16 @@ class Trainer:
         if num_gpus > 1:
             print(f"Number of GPUs: {num_gpus}. Using DataParallel.")
             self.multi_run = True
-            self.model = nn.DataParallel(model)
+            self._model = nn.DataParallel(model)
+
         else:
             print(f"Number of GPU: {num_gpus}. Not using DataParallel.")
             self.multi_run = False
-            self.model = model
-            
+            self._model = model
+
         self.n_epochs = config['n_epochs']
         self.dir_ckpt = config['dir_ckpt']
-
+ 
         param_optimizer = {
             'segformer': list(self.model.segformer.named_parameters()),
             'domain_classifier': list(self.model.domain_classifier.named_parameters())
@@ -79,6 +80,13 @@ class Trainer:
         self.model.to(self.device)
         self.best_metric = 0.0
         wandb.init(**config['wandb'], config=config)
+
+    @property
+    def model(self):
+        if isinstance(self._model, nn.DataParallel):
+            return self._model.module
+        else:
+            return self._model
 
     def fit(self, train_loader, valid_loader, target_loader):
 

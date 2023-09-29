@@ -15,7 +15,7 @@ from segformers.utils import seed_all, print_env
 config = config_dann
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 
     # Set an experiment
     print_env()
