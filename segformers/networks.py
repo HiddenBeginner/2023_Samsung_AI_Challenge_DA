@@ -1,4 +1,4 @@
-from transformers import SegformerForSemanticSegmentation
+from transformers import SegformerForSemanticSegmentation, SegformerFeatureExtractor
 
 id2label = {
     0: 'Road',
@@ -26,4 +26,5 @@ SegFormer = SegformerForSemanticSegmentation.from_pretrained(
             label2id=label2id,
             ignore_mismatched_sizes=True,
         )
+
 

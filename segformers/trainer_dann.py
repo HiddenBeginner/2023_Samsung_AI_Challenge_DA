@@ -22,10 +22,23 @@ class Trainer:
         model,
         config,
     ):
-        self.model = model
+        
+        # GPU가 2개 이상인 경우 DataParallel 사용
+        num_gpus = torch.cuda.device_count()
+
+        if num_gpus > 1:
+            print(f"Number of GPUs: {num_gpus}. Using DataParallel.")
+            self.multi_run = True
+            self._model = nn.DataParallel(model)
+
+        else:
+            print(f"Number of GPU: {num_gpus}. Not using DataParallel.")
+            self.multi_run = False
+            self._model = model
+
         self.n_epochs = config['n_epochs']
         self.dir_ckpt = config['dir_ckpt']
-
+ 
         param_optimizer = {
             'segformer': list(self.model.segformer.named_parameters()),
             'domain_classifier': list(self.model.domain_classifier.named_parameters())
@@ -46,10 +59,16 @@ class Trainer:
             'lr': config['optimizer_D']['lr'],
             'weight_decay': 0.0}
         ]
+            
+        
+        #
+        
 
         self.optimizer = AdamW(optimizer_grouped_parameters)
+        #self.optimizer_D = AdamW(optimizer_D_groupd_parameters)
                                #, **config['optimizer'])
         self.scheduler = CosineAnnealingWarmUpRestarts(self.optimizer, **config['scheduler'])
+        #self.scheduler_D = CosineAnnealingWarmUpRestarts(self.optimizer_D, **config['scheduler_D'])
         # self.criterion = FocalLoss()
         self.threshold_scheduler = DynamicThreshold(start_threshold=0.9, end_threshold=0.7, total_epochs=self.n_epochs)
         self.lambda_scheduler = LambdaScheduler(max_epochs=self.n_epochs)
@@ -58,19 +77,28 @@ class Trainer:
 
         self.criterion = nn.CrossEntropyLoss()
         # self.criterion = FocalLoss()
-        self.criterion_D = nn.BCEWithLogitsLoss()
+        self.criterion_D = nn.BCELoss()
         
+
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         
         self.model.to(self.device)
         self.best_metric = 0.0
         wandb.init(**config['wandb'], config=config)
 
+    @property
+    def model(self):
+        if isinstance(self._model, nn.DataParallel):
+            return self._model.module
+        else:
+            return self._model
+
     def fit(self, train_loader, valid_loader, target_loader):
 
         for e in range(self.n_epochs):
             self.lambda_scheduler.current_epoch = e
-            self.threshold_scheduler.current_epoch = e
+            #self.threshold_scheduler.current_epoch = e
             train_scores = self.train(train_loader, target_loader)
             valid_scores = self.evaluate(valid_loader)
             
@@ -101,24 +129,67 @@ class Trainer:
                     os.remove(path)
 
             self.scheduler.step()
+            self.scheduler_D.step()
         wandb.finish()
 
     def train(self, source_loader, target_loader):
         self.model.train()
         n = 0
-        scores = {'Loss': 0.0,
+        scores = {#'Loss': 0.0,
                   'Semantic Loss': 0.0,
                   'Domain Loss': 0.0,
                   'mIoU': 0.0}
         
         source_iter = iter(source_loader)
         target_iter = iter(target_loader)
+        lamda = self.lambda_scheduler.get_lambda()
 
-        
         for _ in range(max(len(source_loader), len(target_loader))):
-            self.optimizer.zero_grad()
             # train G
+            # for params in self.model.segformer.parameters():
+            #     params.requires_grad = True
             for params in self.model.domain_classifier.parameters():
+                params.requires_grad = False
+
+            # train with source
+            try:
+                source_items = next(source_iter)
+                source_data, source_labels = source_items['pixel_values'].float().to(self.device), source_items['labels'].long().to(self.device)
+            except StopIteration:
+                source_iter = iter(source_loader)
+                source_items = next(source_iter)
+                source_data, source_labels = source_items['pixel_values'].float().to(self.device), source_items['labels'].long().to(self.device)
+            
+            source_semantic_outputs, source_domain_outputs = self.model(source_data, lamda=lamda)
+            source_semantic_outputs = upsampled_logit(source_semantic_outputs, source_labels)
+            source_semantic_loss = self.criterion(source_semantic_outputs, source_labels)
+
+
+            semantic_loss = source_semantic_loss
+
+            
+            
+            
+            # pseudo labeling
+            #pseudo_labels = torch.argmax(target_semantic_outputs, dim=1).long()  # get the predicted class labels
+
+            #prediction_probs = F.softmax(target_semantic_outputs, dim=1)  # get the softmax probabilities
+            #max_probs, _ = torch.max(prediction_probs, dim=1)  # get the max probability for each prediction
+
+            # threshold = self.threshold_scheduler.get_threshold()
+            # mask = max_probs.ge(threshold).float()  # create a mask for predictions with confidence >= threshold
+
+            # # Multiply the pseudo labels with mask so that we only consider high confidence predictions.
+            # pseudo_labels_masked = mask * pseudo_labels.float()
+            # pseudo_labels_masked = pseudo_labels_masked.long()
+            # pseudo_labels_masked = pseudo_labels_masked.detach() # backpropagation에 영향을 주지 않도록하기 위해
+
+            # target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
+            
+            # train D
+            # for params in self.model.domain_classifier.parameters():
+            #     params.requires_grad = True
+            for params in self.model.segformer.parameters():
                 params.requires_grad = False
 
             # train with target
@@ -130,42 +201,8 @@ class Trainer:
                 target_data = next(target_iter)
                 target_data = target_data['pixel_values'].float().to(self.device)
 
-            lamda = self.lambda_scheduler.get_lambda()
             target_semantic_outputs, target_domain_outputs = self.model(target_data, lamda=lamda)
-
-            # pseudo labeling
-            pseudo_labels = torch.argmax(target_semantic_outputs, dim=1).long()  # get the predicted class labels
-
-            prediction_probs = F.softmax(target_semantic_outputs, dim=1)  # get the softmax probabilities
-            max_probs, _ = torch.max(prediction_probs, dim=1)  # get the max probability for each prediction
-
-            threshold = self.threshold_scheduler.get_threshold()
-            mask = max_probs.ge(threshold).float()  # create a mask for predictions with confidence >= threshold
-
-            # Multiply the pseudo labels with mask so that we only consider high confidence predictions.
-            pseudo_labels_masked = mask * pseudo_labels.float()
-            pseudo_labels_masked = pseudo_labels_masked.long()
-            pseudo_labels_masked = pseudo_labels_masked.detach() # backpropagation에 영향을 주지 않도록하기 위해
-
-            target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
-            # train with source
-            try:
-                source_items = next(source_iter)
-                source_data, source_labels = source_items['pixel_values'].float().to(self.device), source_items['labels'].long().to(self.device)
-            except StopIteration:
-                source_iter = iter(source_loader)
-                source_items = next(source_iter)
-                source_data, source_labels = source_items['pixel_values'].float().to(self.device), source_items['labels'].long().to(self.device)
-            
-            source_semantic_outputs, source_domain_outputs = self.model(source_data)
-            source_semantic_outputs = upsampled_logit(source_semantic_outputs, source_labels)
-            source_semantic_loss = self.criterion(source_semantic_outputs, source_labels)
-
-            semantic_loss = source_semantic_loss + target_semantic_loss
-
-            # train D
-            for params in self.model.domain_classifier.parameters():
-                params.requires_grad = True
+            source_semantic_outputs, target_domain_outputs = self.model(source_data, lamda=lamda)
 
             # train with source
             source_domain_loss = self.criterion_D(source_domain_outputs, torch.zeros_like(source_domain_outputs))
@@ -174,6 +211,7 @@ class Trainer:
             target_domain_loss = self.criterion_D(target_domain_outputs, torch.ones_like(target_domain_outputs))
 
             domain_loss = source_domain_loss + target_domain_loss
+           
 
             # Convex combination
             if self.adjuster:
@@ -189,7 +227,7 @@ class Trainer:
             batch_size = len(source_data)
             n += batch_size
             _, predictions = torch.max(source_semantic_outputs, 1)
-            scores['Loss'] += batch_size * total_loss.item()
+            #scores['Loss'] += batch_size * total_loss.item()
             scores['Semantic Loss'] += batch_size * semantic_loss.item()
             scores['Domain Loss'] += batch_size * domain_loss.item()
             for pred, gt in zip(predictions, source_labels):

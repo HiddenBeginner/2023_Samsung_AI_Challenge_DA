@@ -6,6 +6,10 @@ default implementations for both semantic and domain classification.
 """
 from typing import Optional, Tuple, Union
 from collections import OrderedDict
+import math
+
+from transformers import SegformerPreTrainedModel
+
 
 import torch
 import torch.nn as nn
@@ -196,6 +200,7 @@ class DANN(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
+
                 
 class SegFormerDANN(nn.Module):
     """
@@ -214,6 +219,14 @@ class SegFormerDANN(nn.Module):
             domain_classifier = FullyConvolutionalDiscriminator(num_classes=13)
 
         self.domain_classifier = domain_classifier
+
+    @property
+    def module(self):
+        """
+        If the model is being used with DataParallel, 
+        this property will return the actual model.
+        """
+        return self._modules.get('module', self)
 
     def forward(self, x: torch.Tensor, lamda: Optional[float] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -237,12 +250,85 @@ class SegFormerDANN(nn.Module):
         domain_outputs = self.domain_classifier(features_for_discriminator)
 
         return semantic_outputs, domain_outputs
-
+    
+    
     def freeze_bn(self):
         """Freezes the Batch Normalization layers."""
         for layer in self.modules():
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
+
+
+class SegFormerDANN2(nn.Module):
+    """
+    Domain-Adversarial Neural Network (DANN) for semantic segmentation and domain adaptation.
+    """
+    def __init__(self, 
+                 segformer: nn.Module,
+                 domain_classifier: Optional[nn.Module] = None, 
+                 num_classes: Optional[int] = 13):
+        super(SegFormerDANN2, self).__init__()
+        self.grl = GradientReversalLayer()
+        self.segformer = segformer
+        self.encoder = self.segformer.segformer
+        self.decoder = self.segformer.decode_head
+
+
+
+        # Use the provided domain_classifier or default to the DefaultDomainClassifier
+        hidden_sizes = [64, 128, 320, 512]
+        decoder_hidden_size = 768
+        num_encoder_blocks = len(hidden_sizes)
+        classifier_dropout_prob = 0.1
+        reshape_last_stage = True
+        
+        if domain_classifier is None:
+            domain_classifier = SegformerDomainDiscriminator(
+                hidden_sizes=hidden_sizes,
+                decoder_hidden_size=decoder_hidden_size,
+                num_encoder_blocks=num_encoder_blocks,
+                classifier_dropout_prob=classifier_dropout_prob,
+                reshape_last_stage=reshape_last_stage
+                )
+
+        self.domain_classifier = domain_classifier
+
+    @property
+    def module(self):
+        """
+        If the model is being used with DataParallel, 
+        this property will return the actual model.
+        """
+        return self._modules.get('module', self)
+
+    def forward(self, x: torch.Tensor, lamda: Optional[float] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        
+        """
+        x = self.encoder(pixel_values=x, output_hidden_states=True)
+        #print('x',len(x))
+        semantic_outputs = self.decoder(x[1])
+        
+        if lamda is not None:
+            # Assuming you have a GradientReversalLayer named "grl" in your model
+            x_discriminator = self.grl(x[1], lamda)
+            domain_outputs = self.domain_classifier(x_discriminator)
+
+            #print('x_d',len(x_discriminator))
+        else:
+            domain_outputs = self.domain_classifier(x[1])
+
+        return semantic_outputs, domain_outputs
+    
+    
+    def freeze_bn(self):
+        """Freezes the Batch Normalization layers."""
+        for layer in self.modules():
+            if isinstance(layer, nn.BatchNorm2d):
+                layer.eval()
+
+
+
 
 
 
@@ -260,7 +346,7 @@ class GradientReversalFunction(torch.autograd.Function):
         objects for use in the backward pass using the ctx.save_for_backward method.
         """
         ctx.lamda = lamda
-        return x.view_as(x)
+        return x
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -271,9 +357,96 @@ class GradientReversalFunction(torch.autograd.Function):
         """
         return -ctx.lamda * grad_output, None  # Multiply the gradient by -lambda
 
+
 class GradientReversalLayer(nn.Module):
     """
     Wrapper module for the GradientReversalFunction
     """
     def forward(self, x, lamda=1.0):
         return GradientReversalFunction.apply(x, lamda)
+
+
+class SegformerMLP(nn.Module):
+    """
+    Linear Embedding.
+    """
+
+    def __init__(self, input_dim, out_dim):
+        super().__init__()
+        self.proj = nn.Linear(input_dim, out_dim)
+
+    def forward(self, hidden_states: torch.Tensor):
+        hidden_states = hidden_states.flatten(2).transpose(1, 2)
+        hidden_states = self.proj(hidden_states)
+        return hidden_states
+    
+    
+
+
+
+class SegformerDomainDiscriminator(nn.Module):
+    def __init__(self,
+                hidden_sizes: list,
+                decoder_hidden_size: int,
+                num_encoder_blocks: int,
+                classifier_dropout_prob: float,
+                reshape_last_stage: bool):
+        super().__init__()
+        self.hidden_sizes = hidden_sizes
+        self.decoder_hidden_size = decoder_hidden_size
+        self.num_encoder_blocks = num_encoder_blocks
+        self.classifier_dropout_prob = classifier_dropout_prob
+        self.reshape_last_stage = reshape_last_stage
+        
+        # linear layers which will unify the channel dimension of each of the encoder blocks to the same config.decoder_hidden_size
+        mlps = []
+        for i, hidden_size in enumerate(self.hidden_sizes):
+            mlp = SegformerMLP(input_dim=hidden_size, out_dim=768)
+            mlps.append(mlp)
+        self.linear_c = nn.ModuleList(mlps)
+
+        # the following 3 layers implement the ConvModule of the original implementation
+        self.linear_fuse = nn.Conv2d(
+            in_channels=self.decoder_hidden_size * self.num_encoder_blocks,
+            out_channels=self.decoder_hidden_size,
+            kernel_size=1,
+            bias=False,
+        )
+        self.batch_norm = nn.BatchNorm2d(self.decoder_hidden_size)
+        self.activation = nn.ReLU()
+
+        self.dropout = nn.Dropout(self.classifier_dropout_prob)
+        self.classifier = nn.Conv2d(self.decoder_hidden_size, 1, kernel_size=1)
+
+
+    def forward(self, encoder_hidden_states: torch.FloatTensor) -> torch.Tensor:
+        batch_size = encoder_hidden_states[-1].shape[0]
+
+        all_hidden_states = ()
+        for encoder_hidden_state, mlp in zip(encoder_hidden_states, self.linear_c):
+            if self.reshape_last_stage is False and encoder_hidden_state.ndim == 3:
+                height = width = int(math.sqrt(encoder_hidden_state.shape[-1]))
+                encoder_hidden_state = (
+                    encoder_hidden_state.reshape(batch_size, height, width, -1).permute(0, 3, 1, 2).contiguous()
+                )
+
+            # unify channel dimension
+            height, width = encoder_hidden_state.shape[2], encoder_hidden_state.shape[3]
+            encoder_hidden_state = mlp(encoder_hidden_state)
+            encoder_hidden_state = encoder_hidden_state.permute(0, 2, 1)
+            encoder_hidden_state = encoder_hidden_state.reshape(batch_size, -1, height, width)
+            # upsample
+            encoder_hidden_state = nn.functional.interpolate(
+                encoder_hidden_state, size=encoder_hidden_states[0].size()[2:], mode="bilinear", align_corners=False
+            )
+            all_hidden_states += (encoder_hidden_state,)
+
+        hidden_states = self.linear_fuse(torch.cat(all_hidden_states[::-1], dim=1))
+        hidden_states = self.batch_norm(hidden_states)
+        hidden_states = self.activation(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+
+        # logits are of shape (batch_size, num_labels, height/4, width/4)
+        logits = torch.sigmoid(self.classifier(hidden_states))
+
+        return logits

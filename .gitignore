@@ -19,3 +19,6 @@ __pycache__/
 =======
 *.ipynb
 >>>>>>> 68e3adcbea798e03f0f9a875981ebf0b39ca43ac
+
+forward_graph
+runs/

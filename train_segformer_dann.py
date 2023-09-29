@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from transformers import SegformerImageProcessor
 
 from segformers.config import config_dann
-from dann.DomainAdaptation import SegFormerDANN
+from dann.DomainAdaptation import SegFormerDANN2
 from segformers.datasets import SourceDataset, TargetDataset
 from segformers.networks import SegFormer
 from segformers.trainer_dann import Trainer
@@ -15,7 +15,7 @@ from segformers.utils import seed_all, print_env
 config = config_dann
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     # Set an experiment
     print_env()
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     config['run_id'] = run_id
     config['dir_ckpt'] = os.path.join(config['dir_ckpt'], str(run_id))
     os.makedirs(config['dir_ckpt'])
-    model = SegFormerDANN(segformer=SegFormer)
+    model = SegFormerDANN2(segformer=SegFormer)
     image_processor = SegformerImageProcessor(
         image_mean=[0.485, 0.456, 0.406],
         image_std=[0.229, 0.224, 0.225],
