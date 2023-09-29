@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from transformers import SegformerImageProcessor
 
 from segformers.config import config_dann
-from dann.DomainAdaptation import SegFormerDANN
+from dann.DomainAdaptation import SegFormerDANN2
 from segformers.datasets import SourceDataset, TargetDataset
 from segformers.networks import SegFormer
 from segformers.trainer_dann import Trainer
@@ -24,7 +24,7 @@ if __name__ == '__main__':
     config['run_id'] = run_id
     config['dir_ckpt'] = os.path.join(config['dir_ckpt'], str(run_id))
     os.makedirs(config['dir_ckpt'])
-    model = SegFormerDANN(segformer=SegFormer)
+    model = SegFormerDANN2(segformer=SegFormer)
     image_processor = SegformerImageProcessor(
         image_mean=[0.485, 0.456, 0.406],
         image_std=[0.229, 0.224, 0.225],
@@ -54,9 +54,9 @@ if __name__ == '__main__':
         is_training=True
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4)
-    valid_loader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=4)
-    target_loader = DataLoader(target_dataset, batch_size=4, shuffle=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
+    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
+    target_loader = DataLoader(target_dataset, batch_size=1, shuffle=True, num_workers=4)
 
     trainer = Trainer(model, config)
     trainer.fit(train_loader=train_loader,

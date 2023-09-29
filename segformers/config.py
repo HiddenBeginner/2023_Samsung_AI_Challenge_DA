@@ -39,10 +39,17 @@ config_dann = {
         'T_up': 5,
         'gamma': 0.5,
     },
-
+    'scheduler_D': {
+            'T_0': 50,
+            'T_mult': 1,
+            'eta_max': 0.001,
+            'T_up': 5,
+            'gamma': 0.5,
+        },
+    
     'wandb': {
         'project': 'DA',
-        'name': 'SegFormer-DANN'
+        'name': 'SegFormer-DANN2'
     }
 }
 
