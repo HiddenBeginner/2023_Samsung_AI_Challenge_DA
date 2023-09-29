@@ -146,8 +146,8 @@ class Trainer:
 
         for _ in range(max(len(source_loader), len(target_loader))):
             # train G
-            # for params in self.model.segformer.parameters():
-            #     params.requires_grad = True
+            for params in self.model.segformer.parameters():
+                params.requires_grad = True
             for params in self.model.domain_classifier.parameters():
                 params.requires_grad = False
 
@@ -160,7 +160,7 @@ class Trainer:
                 source_items = next(source_iter)
                 source_data, source_labels = source_items['pixel_values'].float().to(self.device), source_items['labels'].long().to(self.device)
             
-            source_semantic_outputs, source_domain_outputs = self.model(source_data, lamda=lamda)
+            source_semantic_outputs, source_domain_outputs = self.model(source_data)
             source_semantic_outputs = upsampled_logit(source_semantic_outputs, source_labels)
             source_semantic_loss = self.criterion(source_semantic_outputs, source_labels)
 
@@ -187,8 +187,8 @@ class Trainer:
             # target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
             
             # train D
-            # for params in self.model.domain_classifier.parameters():
-            #     params.requires_grad = True
+            for params in self.model.domain_classifier.parameters():
+                params.requires_grad = True
             for params in self.model.segformer.parameters():
                 params.requires_grad = False
 
@@ -226,7 +226,11 @@ class Trainer:
 
             batch_size = len(source_data)
             n += batch_size
+
+            source_semantic_outputs = upsampled_logit(source_semantic_outputs, source_labels)
             _, predictions = torch.max(source_semantic_outputs, 1)
+            
+
             #scores['Loss'] += batch_size * total_loss.item()
             scores['Semantic Loss'] += batch_size * semantic_loss.item()
             scores['Domain Loss'] += batch_size * domain_loss.item()
