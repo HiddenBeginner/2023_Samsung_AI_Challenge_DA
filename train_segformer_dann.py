@@ -54,9 +54,9 @@ if __name__ == '__main__':
         is_training=True
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4)
-    valid_loader = DataLoader(valid_dataset, batch_size=4, shuffle=False, num_workers=4)
-    target_loader = DataLoader(target_dataset, batch_size=4, shuffle=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, num_workers=4)
+    valid_loader = DataLoader(valid_dataset, batch_size=2, shuffle=False, num_workers=4)
+    target_loader = DataLoader(target_dataset, batch_size=2, shuffle=True, num_workers=4)
 
     trainer = Trainer(model, config)
     trainer.fit(train_loader=train_loader,

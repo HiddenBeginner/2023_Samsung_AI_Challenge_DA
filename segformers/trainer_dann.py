@@ -38,9 +38,10 @@ class Trainer:
 
         self.n_epochs = config['n_epochs']
         self.dir_ckpt = config['dir_ckpt']
- 
+
+
         param_optimizer = {
-            'segformer': list(self.model.segformer.named_parameters()),
+            'segformer': list(self.model.encoder.named_parameters()) + list(self.model.decoder.named_parameters()),
             'domain_classifier': list(self.model.domain_classifier.named_parameters())
         }
         no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
@@ -52,6 +53,11 @@ class Trainer:
             {'params': [p for n, p in param_optimizer['segformer'] if any(nd in n for nd in no_decay)],
             'lr': config['optimizer']['lr'],
             'weight_decay': 0.0},
+            
+        ]
+        
+        optimizer_D_grouped_parameters = [
+            
             {'params': [p for n, p in param_optimizer['domain_classifier'] if not any(nd in n for nd in no_decay)],
             'lr': config['optimizer_D']['lr'],
             'weight_decay': 0.001},
@@ -59,16 +65,15 @@ class Trainer:
             'lr': config['optimizer_D']['lr'],
             'weight_decay': 0.0}
         ]
-            
         
         #
         
 
         self.optimizer = AdamW(optimizer_grouped_parameters)
-        #self.optimizer_D = AdamW(optimizer_D_groupd_parameters)
+        self.optimizer_D = AdamW(optimizer_D_grouped_parameters)
                                #, **config['optimizer'])
         self.scheduler = CosineAnnealingWarmUpRestarts(self.optimizer, **config['scheduler'])
-        #self.scheduler_D = CosineAnnealingWarmUpRestarts(self.optimizer_D, **config['scheduler_D'])
+        self.scheduler_D = CosineAnnealingWarmUpRestarts(self.optimizer_D, **config['scheduler_D'])
         # self.criterion = FocalLoss()
         self.threshold_scheduler = DynamicThreshold(start_threshold=0.9, end_threshold=0.7, total_epochs=self.n_epochs)
         self.lambda_scheduler = LambdaScheduler(max_epochs=self.n_epochs)
@@ -129,7 +134,7 @@ class Trainer:
                     os.remove(path)
 
             self.scheduler.step()
-            self.scheduler_D.step()
+            #self.scheduler_D.step()
         wandb.finish()
 
     def train(self, source_loader, target_loader):
@@ -146,8 +151,8 @@ class Trainer:
 
         for _ in range(max(len(source_loader), len(target_loader))):
             # train G
-            for params in self.model.segformer.parameters():
-                params.requires_grad = True
+            # for params in self.model.segformer.parameters():
+            #     params.requires_grad = True
             for params in self.model.domain_classifier.parameters():
                 params.requires_grad = False
 
@@ -160,15 +165,18 @@ class Trainer:
                 source_items = next(source_iter)
                 source_data, source_labels = source_items['pixel_values'].float().to(self.device), source_items['labels'].long().to(self.device)
             
-            source_semantic_outputs, source_domain_outputs = self.model(source_data)
+            source_semantic_outputs, _ = self.model(source_data)
             source_semantic_outputs = upsampled_logit(source_semantic_outputs, source_labels)
             source_semantic_loss = self.criterion(source_semantic_outputs, source_labels)
 
 
             semantic_loss = source_semantic_loss
-
-            
-            
+            # Backward pass for segmentation part
+            self.optimizer.zero_grad()  # Zero out the gradients
+            semantic_loss.backward()  # Compute gradients
+            self.optimizer.step()  # Update parameters
+                
+                
             
             # pseudo labeling
             #pseudo_labels = torch.argmax(target_semantic_outputs, dim=1).long()  # get the predicted class labels
@@ -187,9 +195,10 @@ class Trainer:
             # target_semantic_loss = self.criterion(target_semantic_outputs, pseudo_labels_masked)
             
             # train D
+            segmentation_params = list(self.model.encoder.parameters()) + list(self.model.decoder.parameters())
             for params in self.model.domain_classifier.parameters():
                 params.requires_grad = True
-            for params in self.model.segformer.parameters():
+            for params in segmentation_params:
                 params.requires_grad = False
 
             # train with target
@@ -201,8 +210,8 @@ class Trainer:
                 target_data = next(target_iter)
                 target_data = target_data['pixel_values'].float().to(self.device)
 
-            target_semantic_outputs, target_domain_outputs = self.model(target_data, lamda=lamda)
-            source_semantic_outputs, target_domain_outputs = self.model(source_data, lamda=lamda)
+            _, target_domain_outputs = self.model(target_data, lamda=lamda)
+            _, source_domain_outputs = self.model(source_data, lamda=lamda)
 
             # train with source
             source_domain_loss = self.criterion_D(source_domain_outputs, torch.zeros_like(source_domain_outputs))
@@ -212,17 +221,22 @@ class Trainer:
 
             domain_loss = source_domain_loss + target_domain_loss
            
+            # Unfreeze segmentation part for next iteration
+            for param in segmentation_params:
+                param.requires_grad = True
 
-            # Convex combination
-            if self.adjuster:
-                alpha = self.adjuster.alpha
-                beta = self.adjuster.beta
-            else:
-                alpha = 0.5
-                beta = 0.5
-            total_loss = alpha * semantic_loss + beta * domain_loss
-            total_loss.backward()
-            self.optimizer.step()
+            # # Convex combination
+            # if self.adjuster:
+            #     alpha = self.adjuster.alpha
+            #     beta = self.adjuster.beta
+            # else:
+            #     alpha = 0.5
+            #     beta = 0.5
+            # total_loss = alpha * semantic_loss + beta * domain_loss
+            
+            self.optimizer_D.zero_grad()
+            domain_loss.backward()
+            self.optimizer_D.step()
 
             batch_size = len(source_data)
             n += batch_size
