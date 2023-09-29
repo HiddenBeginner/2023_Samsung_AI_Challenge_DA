@@ -237,7 +237,13 @@ class SegFormerDANN(nn.Module):
         domain_outputs = self.domain_classifier(features_for_discriminator)
 
         return semantic_outputs, domain_outputs
-
+    
+    @property
+    def model(self):
+        if isinstance(self._model, nn.DataParallel):
+            return self._model.module
+        return self._model
+    
     def freeze_bn(self):
         """Freezes the Batch Normalization layers."""
         for layer in self.modules():

@@ -22,7 +22,19 @@ class Trainer:
         model,
         config,
     ):
-        self.model = model
+        
+        # GPU가 2개 이상인 경우 DataParallel 사용
+        num_gpus = torch.cuda.device_count()
+
+        if num_gpus > 1:
+            print(f"Number of GPUs: {num_gpus}. Using DataParallel.")
+            self.multi_run = True
+            self.model = nn.DataParallel(model)
+        else:
+            print(f"Number of GPU: {num_gpus}. Not using DataParallel.")
+            self.multi_run = False
+            self.model = model
+            
         self.n_epochs = config['n_epochs']
         self.dir_ckpt = config['dir_ckpt']
 
@@ -60,7 +72,9 @@ class Trainer:
         # self.criterion = FocalLoss()
         self.criterion_D = nn.BCEWithLogitsLoss()
         
+
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         
         self.model.to(self.device)
         self.best_metric = 0.0
