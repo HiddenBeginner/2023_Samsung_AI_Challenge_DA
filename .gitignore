@@ -1,7 +1,12 @@
 .gitignore
+**/wandb/*
 **/__pycache__/*
 
 .vscode/
 ckpt/
+ckpt(old)
 data/
-notebooks/
+wandb/
+outputs/
+notebook/
+

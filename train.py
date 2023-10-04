@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 
+import pandas as pd
 from torch.utils.data import DataLoader
 from transformers import SegformerImageProcessor
 
@@ -26,6 +27,12 @@ if __name__ == '__main__':
         image_mean=[0.485, 0.456, 0.406],
         image_std=[0.229, 0.224, 0.225],
     )
+
+    if not os.path.exists(os.path.join(config['dir_data'], 'full.csv')):
+        train = pd.read_csv(os.path.join(config['dir_data'], 'train_source.csv'))
+        valid = pd.read_csv(os.path.join(config['dir_data'], 'val_source.csv'))
+        full = pd.concat([train, valid], axis=0, ignore_index=True)
+        full.to_csv(os.path.join(config['dir_data'], 'full.csv'), index=False)
 
     train_dataset = SourceDataset(
         root=config['dir_data'],

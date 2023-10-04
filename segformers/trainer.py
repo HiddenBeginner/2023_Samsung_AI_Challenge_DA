@@ -4,11 +4,12 @@ from glob import glob
 
 import torch
 import torch.nn as nn
-import wandb
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import _LRScheduler
 
-from .losses import FocalLoss
+import wandb
+
+from .losses import DiceLoss, label_to_one_hot_label
 from .utils import compute_mIoU
 
 
@@ -19,6 +20,7 @@ class Trainer:
         config,
     ):
         self.model = model
+        self.dice = config['criterion']['dice']
         self.n_epochs = config['n_epochs']
         self.dir_ckpt = config['dir_ckpt']
 
@@ -33,9 +35,9 @@ class Trainer:
         self.optimizer = AdamW(optimizer_grouped_parameters, **config['optimizer'])
 
         self.scheduler = CosineAnnealingWarmUpRestarts(self.optimizer, **config['scheduler'])
-        self.criterion = nn.CrossEntropyLoss()
-        # self.criterion = FocalLoss()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.criterion1 = nn.CrossEntropyLoss()
+        self.criterion2 = DiceLoss()
         self.model.to(self.device)
         self.best_metric = 0.0
         wandb.init(**config['wandb'], config=config)
@@ -78,18 +80,25 @@ class Trainer:
             images = images.float().to(self.device)
             masks = masks.long().to(self.device)
 
-            loss, logits = self.model(pixel_values=images, labels=masks)
+            _, logits = self.model(pixel_values=images, labels=masks)
 
             self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
             upsampled_logits = nn.functional.interpolate(
                 logits,
                 size=masks.shape[-2:],
                 mode="bilinear",
                 align_corners=False
             )
+            loss1 = self.criterion1(upsampled_logits, masks)
+            if self.dice:
+                labels = label_to_one_hot_label(masks, 13, self.device)
+                loss2 = self.criterion2(upsampled_logits, labels)
+                loss = loss1 + loss2
+            else:
+                loss = loss1
+
+            loss.backward()
+            self.optimizer.step()
             _, predicted = upsampled_logits.max(1)
 
             batch_size = len(images)
@@ -113,7 +122,7 @@ class Trainer:
             images = images.float().to(self.device)
             masks = masks.long().to(self.device)
 
-            loss, logits = self.model(pixel_values=images, labels=masks)
+            _, logits = self.model(pixel_values=images, labels=masks)
 
             upsampled_logits = nn.functional.interpolate(
                 logits,
@@ -121,6 +130,14 @@ class Trainer:
                 mode="bilinear",
                 align_corners=False
             )
+            loss1 = self.criterion1(upsampled_logits, masks)
+            if self.dice:
+                labels = label_to_one_hot_label(masks, 13, self.device)
+                loss2 = self.criterion2(upsampled_logits, labels)
+                loss = loss1 + loss2
+            else:
+                loss = loss1
+
             _, predicted = upsampled_logits.max(1)
 
             batch_size = len(images)
