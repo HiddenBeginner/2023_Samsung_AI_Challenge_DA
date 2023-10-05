@@ -60,6 +60,8 @@ class BinaryDiceLoss(nn.Module):
         Loss tensor according to arg reduction
     Raise:
         Exception if unexpected reduction
+
+    https://github.com/hubutui/DiceLoss-PyTorch/blob/master/loss.py
     """
     def __init__(self, smooth=1, p=2, reduction='mean'):
         super(BinaryDiceLoss, self).__init__()
@@ -96,6 +98,8 @@ class DiceLoss(nn.Module):
         other args pass to BinaryDiceLoss
     Return:
         same as BinaryDiceLoss
+
+    https://github.com/hubutui/DiceLoss-PyTorch/blob/master/loss.py
     """
     def __init__(self, weight=None, ignore_index=None, **kwargs):
         super(DiceLoss, self).__init__()
