@@ -70,6 +70,21 @@ PSSC는 미국의 산업응용수학 학회 SIAM과 POSTECH 수리 데이터 과
 <br>
 
 ## 코드 재현 방법
+아래의 의존성 패키지 설치 명령은 다음 환경에서 성공적으로 실행되었습니다.
+- Pyton Version: 3.8.17
+- PyTorch Version: 1.13.0+cu117
+- OS: Linux 5.4.0-155-generic
+- GPU: NVIDIA A100-SXM4-40GB
+- Nvidia Driver Version: 470.199.02
+- CUDA: `conda install pytorch==1.13.0 torchvision==0.14.0 pytorch-cuda=11.7 -c pytorch -c nvidia` 명령어로 설치
+
+~~~
+conda create -n pssc python=3.8.17
+conda activate pssc
+pip install -r requirements.txt
+~~~
+
+<br>
 
 **배경 모델링 코드 재현**
 - `notebooks/(0)_Backgroud_Modeling.ipynb` 실행
