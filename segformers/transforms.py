@@ -86,3 +86,16 @@ augmentation_pl = A.Compose(
         A.RandomCrop(512, 512, p=1.0),
     ]
 )
+
+augmentation_dann = A.Compose(
+    [
+        A.RandomScale(scale_limit=(-0.5, 0.0), p=1.0),
+        A.RandomCrop(512, 512, p=1.0),
+        A.HorizontalFlip(),
+        A.OneOf([
+            A.RGBShift(r_shift_limit=25, g_shift_limit=25, b_shift_limit=25, p=1.0),
+            A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=1.0),
+            A.HueSaturationValue(p=1.0)
+        ])
+    ]
+)

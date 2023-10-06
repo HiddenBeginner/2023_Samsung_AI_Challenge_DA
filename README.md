@@ -85,7 +85,8 @@ PSSC는 미국의 산업응용수학 학회 SIAM과 POSTECH 수리 데이터 과
 <br>
 
 **2번 모델 재현**
-- `python train_dann.py` 실행
+- `python train_segformer_dann.py` 실행
+- `notebooks/(2)_Inference_SegFormerDANN.ipynb` 실행
 
 <br>
 
